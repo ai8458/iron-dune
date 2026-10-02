@@ -127,9 +127,9 @@ export class BattleSimulation {
     this.elapsed += dt;
     const p = this.player;
     p.reload = Math.max(0, p.reload - dt);
-    const throttle = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);
-    const turn = (input.left ? 1 : 0) - (input.right ? 1 : 0);
-    const targetSpeed = throttle > 0 ? (input.boost ? 19 : 12.5) : throttle < 0 ? -7 : 0;
+    const throttle = Number.isFinite(input.throttle) ? clamp(input.throttle, -1, 1) : (input.forward ? 1 : 0) - (input.backward ? 1 : 0);
+    const turn = Number.isFinite(input.steer) ? clamp(input.steer, -1, 1) : (input.left ? 1 : 0) - (input.right ? 1 : 0);
+    const targetSpeed = throttle > 0 ? (input.boost ? 19 : 12.5) * throttle : throttle * 7;
     p.speed += (targetSpeed - p.speed) * Math.min(1, dt * (throttle ? 1.6 : 2.5));
     if (Math.abs(p.speed) < .03) p.speed = 0;
     const rotation = turn * dt * .68 * (input.boost ? .7 : 1);

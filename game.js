@@ -1,6 +1,7 @@
 import { BattleSimulation, RELOAD_TIME, terrainHeight, clamp, TAU } from './simulation.js';
 import { DesertWorld } from './world.js';
 import { BattleAudio } from './audio.js';
+import { TouchControls } from './touch-controls.js';
 
 const $ = id => document.getElementById(id);
 const sim = new BattleSimulation();
@@ -8,23 +9,28 @@ const audio = new BattleAudio();
 const canvas = $('gameCanvas'), battlefield = $('battlefield');
 const keys = new Set();
 let world, zoom = false, sensitivity = 1, lastTime = 0, hudTime = 0, messageTimer = 0, damageTimer = 0, hitTimer = 0;
-let pointerDown = false, previouslyLocked = false, previousReload = 0, dialogWasPlaying = false;
+let pointerDown = false, previouslyLocked = false, previousReload = 0;
+const dialogResume = new WeakMap();
+let touchControls, touchMode = null;
 const enemyTags = new Map();
 const radar = $('radarCanvas'), radarCtx = radar.getContext('2d');
+const touchRadarCtx = $('touchRadarCanvas').getContext('2d');
 const stateText = new Map();
 function text(id, value) { if (stateText.get(id) !== String(value)) { $(id).textContent = value; stateText.set(id, String(value)); } }
 function showMessage(message, duration = 3) { text('battleMessage', message); $('battleMessage').classList.add('visible'); messageTimer = duration; }
-function clearInput() { keys.clear(); pointerDown = false; }
+function clearInput() { keys.clear(); pointerDown = false; touchControls?.clear(); }
 function releaseMouse() { if (document.pointerLockElement) document.exitPointerLock(); }
 function lockMouse() {
-  if (sim.status !== 'playing' || document.pointerLockElement === canvas) return;
+  if (touchMode || sim.status !== 'playing' || document.pointerLockElement === canvas) return;
   try { const request = canvas.requestPointerLock?.(); request?.catch(() => text('driveHint', '方向键瞄准 · 按住鼠标拖动瞄准 · 空格开火')); }
   catch { text('driveHint', '方向键瞄准 · 按住鼠标拖动瞄准 · 空格开火'); }
 }
 function start({ lock = true } = {}) {
   sim.start(); audio.init();
   $('introPanel').classList.add('hidden'); $('pauseOverlay').classList.add('hidden'); $('endOverlay').classList.add('hidden');
-  battlefield.classList.add('playing'); text('missionTag', '进行中');
+  battlefield.classList.add('playing', 'touch-active'); text('missionTag', '进行中');
+  if (touchMode) document.body.classList.add('touch-session');
+  world?.resize();
   canvas.focus({ preventScroll: true });
   if (lock) lockMouse();
   if (sim.elapsed === 0) { showMessage('第一波敌军正在接近 · 保持警戒', 4); text('radioText', '“前方发现三辆敌方坦克。主炮已就绪，自由开火。”'); }
@@ -32,6 +38,7 @@ function start({ lock = true } = {}) {
 function pause() {
   if (sim.status !== 'playing') return;
   sim.pause(); clearInput(); releaseMouse();
+  battlefield.classList.remove('touch-active');
   $('pauseOverlay').classList.remove('hidden'); text('missionTag', '已暂停');
 }
 function reset() {
@@ -41,13 +48,38 @@ function reset() {
   for (const tag of enemyTags.values()) tag.remove(); enemyTags.clear();
   previousReload = 0; start();
 }
-function toggleZoom() { if (sim.status !== 'playing') return; zoom = !zoom; battlefield.classList.toggle('zoomed', zoom); }
+function toggleZoom() { if (sim.status !== 'playing') return; zoom = !zoom; battlefield.classList.toggle('zoomed', zoom); $('touchZoomBtn').setAttribute('aria-pressed', String(zoom)); }
+function setTouchMode(enabled) {
+  if (touchMode === enabled) return;
+  touchMode = enabled; clearInput();
+  document.body.classList.toggle('touch-mode', enabled);
+  $('touchControlsInput').checked = enabled;
+  text('introControls', enabled ? '左侧摇杆驾驶 · 滑动瞄准 · 按住开火' : 'WASD 驾驶 · 鼠标瞄准 · 点击开火');
+  canvas.setAttribute('aria-label', enabled ? '3D 坦克战场，左侧摇杆驾驶，滑动瞄准，右下角开火' : '3D 坦克战场，WASD 驾驶，方向键瞄准，空格开火');
+  if (enabled) {
+    releaseMouse(); $('qualitySelect').value = 'low'; world?.setQuality('low');
+    if (sim.status === 'playing') document.body.classList.add('touch-session');
+  } else document.body.classList.remove('touch-session');
+  world?.resize();
+}
+function leaveBattle() {
+  pause(); clearInput(); document.body.classList.remove('touch-session');
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  world?.resize();
+}
 function openDialog(dialog) {
   if (dialog.open) return;
-  dialogWasPlaying = sim.status === 'playing';
-  if (dialogWasPlaying) pause();
+  const wasPlaying = sim.status === 'playing';
+  dialogResume.set(dialog, wasPlaying);
+  if (wasPlaying) pause();
   dialog.showModal();
 }
+function resumeFromDialog(dialog) {
+  if (dialog.open) return;
+  const wasPlaying = dialogResume.get(dialog); dialogResume.delete(dialog);
+  if (wasPlaying && sim.status === 'paused' && !document.querySelector('dialog[open]')) start({ lock: false });
+}
+function closeDialog(dialog) { dialog.close(); resumeFromDialog(dialog); }
 function setSound(value) {
   audio.setEnabled(value);
   $('audioInput').checked = value;
@@ -64,19 +96,34 @@ $('pauseBtn').addEventListener('click', () => { if (sim.status === 'paused') sta
 $('manualBtn').addEventListener('click', () => openDialog($('manualDialog')));
 $('allControlsBtn').addEventListener('click', () => openDialog($('manualDialog')));
 $('settingsBtn').addEventListener('click', () => openDialog($('settingsDialog')));
+$('touchSettingsBtn').addEventListener('click', () => openDialog($('settingsDialog')));
+$('touchControlsInput').addEventListener('change', event => setTouchMode(event.target.checked));
+$('leaveBattleBtn').addEventListener('click', leaveBattle);
+$('leaveEndBtn').addEventListener('click', leaveBattle);
+$('touchFireBtn').addEventListener('singlefire', () => sim.fire());
+touchControls = new TouchControls({
+  joystick: $('touchJoystick'), knob: $('touchKnob'), canvas,
+  fireButton: $('touchFireBtn'), boostButton: $('touchBoostBtn'), zoomButton: $('touchZoomBtn'),
+  isPlaying: () => sim.status === 'playing', onActivate: () => setTouchMode(true),
+  onAim: (dx, dy) => sim.aim(dx, dy, sensitivity * (zoom ? .45 : 1) * 1.8), onZoom: toggleZoom,
+});
+setTouchMode(matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints > 0 && !matchMedia('(hover: hover)').matches));
 $('operationsBtn').addEventListener('click', () => { battlefield.scrollIntoView({ behavior: 'smooth', block: 'center' }); if (sim.status === 'paused') start({ lock: false }); });
 $('soundBtn').addEventListener('click', () => setSound(!audio.enabled));
 $('audioInput').addEventListener('change', event => setSound(event.target.checked));
 $('sensitivityInput').addEventListener('input', event => { sensitivity = Number(event.target.value); $('sensitivityValue').value = sensitivity.toFixed(1); });
 $('qualitySelect').addEventListener('change', event => world?.setQuality(event.target.value));
 for (const dialog of document.querySelectorAll('dialog')) {
-  for (const button of dialog.querySelectorAll('.dialog-close,.dialog-done')) button.addEventListener('click', () => dialog.close());
-  dialog.addEventListener('close', () => { if (dialogWasPlaying && sim.status === 'paused') start({ lock: false }); dialogWasPlaying = false; });
-  dialog.addEventListener('click', event => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); } });
+  for (const button of dialog.querySelectorAll('.dialog-close,.dialog-done')) button.addEventListener('click', () => closeDialog(dialog));
+  dialog.addEventListener('close', () => resumeFromDialog(dialog));
+  dialog.addEventListener('cancel', event => { event.preventDefault(); closeDialog(dialog); });
+  dialog.addEventListener('click', event => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeDialog(dialog); } });
 }
 $('fullscreenBtn').addEventListener('click', async () => {
-  try { if (document.fullscreenElement) await document.exitFullscreen(); else await battlefield.requestFullscreen(); }
-  catch { showMessage('当前浏览器不支持全屏，可按 F11 放大战场'); }
+  if (touchMode) document.body.classList.add('touch-session');
+  try { if (document.fullscreenElement) await document.exitFullscreen(); else if (battlefield.requestFullscreen) await battlefield.requestFullscreen(); }
+  catch { if (!touchMode) showMessage('当前浏览器不支持全屏，可按 F11 放大战场'); }
+  world?.resize();
 });
 document.addEventListener('fullscreenchange', () => {
   const fullscreen = !!document.fullscreenElement;
@@ -93,14 +140,17 @@ document.addEventListener('pointerlockchange', () => {
 document.addEventListener('pointerlockerror', () => text('driveHint', '方向键瞄准 · 按住鼠标拖动瞄准 · 空格开火'));
 canvas.addEventListener('contextmenu', event => event.preventDefault());
 canvas.addEventListener('pointerdown', event => {
+  if (event.pointerType === 'touch') return;
   if (sim.status !== 'playing') return;
   canvas.focus({ preventScroll: true });
   if (event.button === 2) { toggleZoom(); return; }
   if (event.button !== 0) return;
   pointerDown = true; sim.fire(); lockMouse();
 });
-document.addEventListener('pointerup', () => { pointerDown = false; });
+document.addEventListener('pointerup', event => { if (event.pointerType !== 'touch') pointerDown = false; });
+document.addEventListener('pointercancel', event => { if (event.pointerType !== 'touch') pointerDown = false; });
 document.addEventListener('mousemove', event => {
+  if (event.sourceCapabilities?.firesTouchEvents) return;
   if (document.pointerLockElement === canvas || (event.target === canvas && event.buttons === 1)) sim.aim(event.movementX, event.movementY, sensitivity * (zoom ? .45 : 1));
 });
 window.addEventListener('keydown', event => {
@@ -126,6 +176,7 @@ new ResizeObserver(() => world?.resize()).observe(battlefield);
 
 function end(victory) {
   clearInput(); releaseMouse();
+  battlefield.classList.remove('touch-active');
   $('pauseOverlay').classList.add('hidden'); $('endOverlay').classList.remove('hidden');
   text('endIcon', victory ? '✦' : '◇');
   text('endEyebrow', victory ? 'OPERATION COMPLETE' : 'VEHICLE LOST');
@@ -158,6 +209,11 @@ function updateHud(dt) {
   text('gear', p.speed > .2 ? `D${Math.min(4, Math.floor(p.speed / 5) + 1)}` : p.speed < -.2 ? 'R' : 'N');
   text('ammo', p.reload > 0 ? '00' : '01');
   text('reloadText', p.reload > 0 ? `自动装填 ${p.reload.toFixed(1)}s` : '主炮已就绪');
+  text('touchFireLabel', p.reload > 0 ? '装填中' : '开火');
+  text('touchReloadLabel', p.reload > 0 ? `${p.reload.toFixed(1)} s` : '按住连射');
+  $('touchFireBtn').classList.toggle('reloading', p.reload > 0);
+  $('touchZoomBtn').setAttribute('aria-pressed', String(zoom));
+  text('touchMission', `第 ${sim.wave + 1} / 3 波 · 击毁 ${sim.kills} / 12`);
   $('reloadBar').style.width = `${(1 - p.reload / RELOAD_TIME) * 100}%`;
   $('reloadDot').style.background = p.reload > 0 ? '#dfa568' : '#cbda9f';
   if (previousReload > 0 && !p.reload && sim.status === 'playing') audio.ready(); previousReload = p.reload;
@@ -218,10 +274,14 @@ function drawRadar(time) {
     ctx.save(); ctx.translate(mx(e.x), mz(e.z)); ctx.rotate(Math.PI / 4); ctx.fillStyle = '#e89964'; ctx.shadowBlur = 9; ctx.shadowColor = '#eb97514a'; ctx.fillRect(-4, -4, 8, 8); ctx.restore();
     ctx.beginPath(); ctx.arc(mx(e.x), mz(e.z), 11 + Math.sin(time * 2) * 2, 0, TAU); ctx.strokeStyle = '#d6905838'; ctx.stroke();
   }
+  if (touchMode) touchRadarCtx.drawImage(radar, 0, 0, 240, 205);
 }
 function frame(milliseconds) {
   const dt = Math.min((milliseconds - lastTime) / 1000 || .016, .05); lastTime = milliseconds;
-  const input = { forward: keys.has('KeyW'), backward: keys.has('KeyS'), left: keys.has('KeyA'), right: keys.has('KeyD'), boost: keys.has('ShiftLeft') || keys.has('ShiftRight'), aimLeft: keys.has('ArrowLeft'), aimRight: keys.has('ArrowRight'), aimUp: keys.has('ArrowUp'), aimDown: keys.has('ArrowDown'), fire: keys.has('Space') || pointerDown, zoom };
+  const touch = touchControls.state;
+  const keyboardThrottle = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0);
+  const keyboardSteer = (keys.has('KeyA') ? 1 : 0) - (keys.has('KeyD') ? 1 : 0);
+  const input = { throttle: keyboardThrottle || touch.throttle, steer: keyboardSteer || touch.steer, boost: keys.has('ShiftLeft') || keys.has('ShiftRight') || touch.boost, aimLeft: keys.has('ArrowLeft'), aimRight: keys.has('ArrowRight'), aimUp: keys.has('ArrowUp'), aimDown: keys.has('ArrowDown'), fire: keys.has('Space') || pointerDown || touch.fire, zoom };
   sim.update(dt, input); processEvents(); world.update(sim, dt, zoom); audio.update(sim.player.speed, sim.status === 'playing');
   hudTime += dt;
   if (hudTime >= 1 / 25) { updateHud(hudTime); drawRadar(milliseconds / 1000); hudTime = 0; }
@@ -229,7 +289,7 @@ function frame(milliseconds) {
 }
 
 try {
-  world = new DesertWorld(canvas, sim.obstacles);
+  world = new DesertWorld(canvas, sim.obstacles, { quality: touchMode ? 'low' : 'high' });
   canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); pause(); $('loadingScreen').classList.remove('hidden'); text('loadingText', '图形设备暂时不可用，请刷新页面重新部署。'); });
   world.update(sim, .016, false); updateHud(0); drawRadar(0);
   $('loadingScreen').classList.add('hidden');
@@ -239,4 +299,4 @@ try {
   $('loadingScreen').querySelector('strong').textContent = '战场未能启动';
   text('loadingText', '请使用支持 WebGL 2 的新版 Edge 或 Chrome，并启用浏览器图形加速。');
 }
-export { sim as battle, world as battlefieldView };
+export { sim as battle, world as battlefieldView, touchControls };

@@ -141,9 +141,9 @@ export function createTank(isPlayer = false) {
 }
 
 export class DesertWorld {
-  constructor(canvas, obstacles) {
+  constructor(canvas, obstacles, { quality = 'high' } = {}) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, quality === 'low' ? .85 : 1.6));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -156,9 +156,11 @@ export class DesertWorld {
     this.scene.add(new THREE.HemisphereLight('#e4e9e2', '#968a72', 2.1));
     const sun = new THREE.DirectionalLight('#ffecd0', 3);
     sun.position.set(-90, 90, -140); sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -125; sun.shadow.camera.right = 125; sun.shadow.camera.top = 125; sun.shadow.camera.bottom = -125; sun.shadow.camera.near = 1; sun.shadow.camera.far = 420; sun.shadow.bias = -.0004; sun.shadow.normalBias = .12;
+    const shadowSize = quality === 'low' ? 768 : 2048;
+    sun.shadow.mapSize.set(shadowSize, shadowSize); sun.shadow.camera.left = -125; sun.shadow.camera.right = 125; sun.shadow.camera.top = 125; sun.shadow.camera.bottom = -125; sun.shadow.camera.near = 1; sun.shadow.camera.far = 420; sun.shadow.bias = -.0004; sun.shadow.normalBias = .12;
     this.scene.add(sun); this.scene.add(sun.target); this.sun = sun;
     this.buildSky(); this.buildTerrain(); this.buildMountains(); this.buildDecor(obstacles); this.buildOutpost();
+    this.dust.visible = quality !== 'low';
     this.playerTank = createTank(true); this.scene.add(this.playerTank);
     this.enemyModels = new Map(); this.shellModels = new Map(); this.particles = [];
     this.particleGeometry = new THREE.IcosahedronGeometry(1, 0);
@@ -342,6 +344,11 @@ export class DesertWorld {
   setQuality(quality) {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, quality === 'low' ? .85 : 1.6));
     this.dust.visible = quality !== 'low';
+    const shadowSize = quality === 'low' ? 768 : 2048;
+    if (this.sun.shadow.mapSize.x !== shadowSize) {
+      this.sun.shadow.mapSize.set(shadowSize, shadowSize);
+      this.sun.shadow.map?.dispose(); this.sun.shadow.map = null;
+    }
     this.resize();
   }
   reset() {
