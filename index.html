@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#edece5">
+  <meta name="description" content="驾驶主战坦克，穿越沙丘，守住前哨。一个可直接在浏览器游玩的第一人称坦克游戏。">
+  <title>IRON DUNE · 铁砂行动</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%232b3026'/%3E%3Cpath d='M11 27l8-15h5l-8 15zm9 0l8-15h4l-8 15z' fill='%23e78143'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="IRON DUNE 首页"><span class="brand-symbol"><i></i><i></i><i></i></span><span>IRON DUNE<small>铁砂行动</small></span></a>
+    <nav aria-label="主导航"><button class="nav-link active" id="operationsBtn">作战指挥室<span>01</span></button><button class="nav-link" id="manualBtn">驾驶手册<span>02</span></button></nav>
+    <div class="header-right"><span class="connection"><i></i> 战场已就绪</span><span class="header-divider"></span><button class="icon-button" id="soundBtn" title="开启声音" aria-label="开启声音"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4zM16 9l5 6m0-6-5 6"/></svg></button><button class="icon-button" id="settingsBtn" title="游戏设置" aria-label="游戏设置"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg></button></div>
+  </header>
+
+  <main>
+    <section class="page-heading"><div><div class="eyebrow"><span class="orange-dash"></span> OPERATION / DESERT OUTPOST</div><h1>守住前哨，<span>驶向黎明。</span></h1></div><div class="location"><svg viewBox="0 0 24 24"><path d="M12 21s7-7 7-12a7 7 0 1 0-14 0c0 5 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/></svg><div>阿什拉夫沙漠 · 第 07 区<small>06:40 AM <b> / </b> 晴 · 能见度良好</small></div><span class="mode-badge">单人战役</span></div></section>
+
+    <div class="battle-layout">
+      <section id="battlefield" class="battlefield" aria-label="第一人称坦克战场">
+        <canvas id="gameCanvas" tabindex="0" aria-label="3D 坦克战场，WASD 驾驶，方向键瞄准，空格开火"></canvas>
+        <div class="scene-vignette"></div><div class="damage-flash" id="damageFlash"></div>
+        <div class="view-top"><div class="vehicle"><span class="live-dot"></span><div>M–04 <span>主战坦克</span><small>COMMANDER VIEW / 第一人称</small></div></div><div class="compass"><div class="compass-labels"><span>NW</span><span>330</span><b id="bearing">N &nbsp; 000°</b><span>030</span><span>NE</span></div><div class="compass-ticks"></div><i></i></div><div class="view-actions"><span class="live-label">LIVE</span><button id="pauseBtn" class="viewport-button" title="暂停游戏" aria-label="暂停游戏"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg></button><button id="fullscreenBtn" class="viewport-button" title="全屏战场" aria-label="全屏战场"><svg viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div></div>
+        <div id="targetMarkers" class="target-markers"></div>
+        <div class="reticle" id="reticle"><i class="reticle-top"></i><i class="reticle-left"></i><i class="reticle-right"></i><i class="reticle-bottom"></i><span></span><div class="reticle-range" id="range">120 M</div></div>
+        <div class="zoom-label" id="zoomLabel">2.4× &nbsp; 精密瞄准</div>
+        <div class="hit-marker" id="hitMarker">✕<span>命中目标</span></div>
+        <div class="battle-message" id="battleMessage" role="status"></div>
+        <div class="drive-hint" id="driveHint">点击画面锁定鼠标 · Esc 释放 / 暂停</div>
+
+        <div class="intro-panel" id="introPanel"><div class="intro-overline">任务简报 <span>001 — 003</span></div><h2>指挥官，<br>该你上场了。</h2><p>敌方装甲正在接近。<br>驾驶 M–04，清除三波敌军，守住沙漠前哨。</p><button class="primary-button" id="startBtn">启动坦克 <span>↗</span></button><div class="intro-foot"><span class="tiny-cross">+</span> WASD 驾驶 <span>·</span> 鼠标瞄准 <span>·</span> 点击开火</div></div>
+
+        <div class="view-bottom"><div class="armor-readout"><div class="hud-caption"><svg viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6Z"/></svg> 装甲完整度</div><div class="armor-numbers"><strong id="health">100</strong><span>%</span><small id="healthState">状态良好</small></div><div class="armor-track"><i id="healthBar"></i></div></div><div class="speed-readout"><strong id="speed">00</strong><span>KM/H</span><div class="gear"><i id="gear">N</i><span>▰ ▰ ▰ ▰ ▰</span></div></div><div class="ammo-readout"><div class="hud-caption">120 MM <span>穿甲弹</span></div><div class="ammo-count"><svg viewBox="0 0 24 40"><path d="M8 35V12l4-9 4 9v23ZM6 35h12v3H6Z"/></svg><strong id="ammo">01</strong><span>/ ∞</span></div><div class="reload-status"><i id="reloadDot"></i><span id="reloadText">主炮已就绪</span></div><div class="reload-track"><i id="reloadBar"></i></div></div></div>
+        <div class="scene-coordinates" id="coordinates">GRID 040 : 065 <span>IRON DUNE / TACTICAL SYSTEMS</span></div>
+
+        <div class="pause-overlay hidden" id="pauseOverlay"><div class="modal-mark">Ⅱ</div><span class="eyebrow">MISSION ON HOLD</span><h2>战场已暂停</h2><p>深呼吸，下一发由你决定。</p><button class="primary-button" id="resumeBtn">继续战斗 <span>→</span></button><button class="text-button" id="restartPauseBtn">重新部署</button></div>
+        <div class="end-overlay hidden" id="endOverlay"><div class="modal-mark" id="endIcon">✦</div><span class="eyebrow" id="endEyebrow">OPERATION COMPLETE</span><h2 id="endTitle">前哨，守住了。</h2><p id="endDescription">最后一辆敌方坦克已被击毁。</p><div class="end-stats"><div><strong id="endScore">0</strong><span>战斗得分</span></div><div><strong id="endKills">0</strong><span>击毁目标</span></div><div><strong id="endAccuracy">0%</strong><span>命中率</span></div></div><button class="primary-button" id="restartBtn">再次出击 <span>↗</span></button></div>
+      </section>
+
+      <aside class="sidebar">
+        <section class="radar-section"><div class="panel-heading"><h2>战术雷达</h2><span>TACTICAL MAP</span></div><div class="radar-wrap"><canvas id="radarCanvas" width="480" height="410" aria-label="雷达：橙色为敌军，白色为你的坦克"></canvas><span class="radar-north">N</span><span class="radar-scale">200 M</span><span class="radar-signal">◉ SIGNAL STABLE</span></div><div class="radar-legend"><span><i class="friendly"></i> 我方</span><span><i class="hostile"></i> 敌方</span><span><i class="obstacle"></i> 掩体</span></div></section>
+        <section class="mission-section"><div class="panel-heading"><h2>当前任务</h2><span class="mission-tag" id="missionTag">待部署</span></div><div class="mission-name"><span>01</span><div>守卫沙漠前哨<small>清除所有敌方装甲单位</small></div></div><div class="wave-progress"><i id="wave1"></i><i id="wave2"></i><i id="wave3"></i></div><div class="wave-caption"><span>战役进度</span><strong id="waveText">第 1 / 3 波</strong></div><div class="stats-grid"><div><span>击毁目标</span><strong id="kills">00 <small>/ 12</small></strong></div><div><span>战斗得分</span><strong id="score">0000</strong></div></div></section>
+        <section class="radio-section"><div class="radio-icon"><span></span><span></span><span></span><span></span><span></span></div><div><span>指挥部通讯 <i>HQ</i></span><p id="radioText">“保持移动，利用掩体。<br>我们会在这里等你凯旋。”</p></div></section>
+      </aside>
+    </div>
+
+    <section class="controls-strip" aria-label="快捷操作"><div class="controls-title"><span>掌控你的战车</span><small>FIELD CONTROLS</small></div><div class="control-item"><div class="key-cluster"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div><span>坦克驾驶</span></div><div class="control-item"><svg class="mouse-icon" viewBox="0 0 24 30"><rect x="4" y="2" width="16" height="25" rx="8"/><path d="M12 2v10M4 12h16"/></svg><span>瞄准 / 左键开火</span></div><div class="control-item"><kbd>Q</kbd><span>瞄准镜</span></div><div class="control-item"><kbd>SPACE</kbd><span>开火</span></div><div class="control-item"><kbd>ESC</kbd><span>暂停</span></div><button class="all-controls" id="allControlsBtn">完整操作指南 <span>↗</span></button></section>
+    <footer><span><i></i> 为每一位坦克指挥官而造。</span><span>IRON DUNE <b>©</b> 2026 <span class="footer-divider">/</span> BUILT FOR THE FRONTLINE</span></footer>
+  </main>
+
+  <dialog id="manualDialog"><button class="dialog-close" aria-label="关闭驾驶手册">×</button><span class="eyebrow">FIELD MANUAL / 02</span><h2>你的第一场装甲战。</h2><p>清除三波共 12 辆敌方坦克即可获胜。每波结束会修复 25 点装甲。每辆敌方坦克需要命中两发。</p><div class="manual-grid"><div><kbd>W</kbd><kbd>S</kbd><span>前进 / 倒车</span></div><div><kbd>A</kbd><kbd>D</kbd><span>车体左转 / 右转</span></div><div><kbd>鼠标</kbd><span>转动炮塔与调整仰角</span></div><div><kbd>↑ ↓ ← →</kbd><span>也可用方向键瞄准</span></div><div><kbd>左键</kbd><kbd>空格</kbd><span>发射主炮 · 自动装填 2.2 秒</span></div><div><kbd>Q</kbd><span>切换 2.4 倍瞄准镜</span></div><div><kbd>Shift</kbd><span>加速行驶</span></div><div><kbd>Esc</kbd><kbd>P</kbd><span>暂停 / 继续</span></div></div><div class="manual-note">战术提示：用雷达寻找橙色目标，移动到掩体后等待装填。点击战场可锁定鼠标，按 Esc 释放；未锁定时，按住鼠标拖动也能瞄准。</div><button class="primary-button dialog-done">收到，指挥部 <span>→</span></button></dialog>
+
+  <dialog id="settingsDialog"><button class="dialog-close" aria-label="关闭设置">×</button><span class="eyebrow">VEHICLE SYSTEMS</span><h2>战车设置</h2><label class="setting-row">鼠标灵敏度 <input id="sensitivityInput" type="range" min="0.3" max="2" step="0.1" value="1"><output id="sensitivityValue">1.0</output></label><label class="setting-row">画质 <select id="qualitySelect"><option value="high">高 · 阴影与细节</option><option value="low">流畅 · 省电模式</option></select></label><label class="setting-row">战场声音 <input id="audioInput" type="checkbox"><span>引擎 / 炮火 / 命中</span></label><button class="primary-button dialog-done">返回战场 <span>→</span></button></dialog>
+  <div class="loading-screen" id="loadingScreen"><span class="brand-symbol"><i></i><i></i><i></i></span><strong>正在准备战场</strong><span id="loadingText">装载地形与装甲单位…</span></div>
+  <script type="module" src="game.js"></script>
+</body>
+</html>
